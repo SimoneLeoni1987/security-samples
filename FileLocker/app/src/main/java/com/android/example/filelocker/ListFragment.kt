@@ -16,7 +16,11 @@
 
 package com.android.example.filelocker
 
+import android.content.SharedPreferences
 import android.os.Bundle
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
@@ -24,7 +28,10 @@ import android.view.ViewGroup
 import android.widget.EditText
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
+import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.observe
 import androidx.navigation.fragment.findNavController
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -33,28 +40,50 @@ import com.android.example.filelocker.databinding.FragmentListBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 
+
 private const val ENCRYPTED_PREFS_FILE_NAME = "default_prefs"
 private const val ENCRYPTED_PREFS_PASSWORD_KEY = "key_prefs_password"
 
+private const val MASTER_KEY_ALIAS = "masterkey"
+
+
+// Vengono create delle shared pref tramite una master key
+// La master key viene salvato nel key store.
+// Vengono create una keyset di chiavi (CRIPTATE TRAMITE MASTER KEY)  per criptare i valori che
+//  vengono inseriti nelle encripted shared prefs.
 class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
 
 
     private lateinit var binding: FragmentListBinding
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var sharedLive: LiveData<SharedPreferences>
 
-    private val sharedPreferences by lazy {
+
+    //MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+
+    /*private val sharedPreferences by lazy {
         EncryptedSharedPreferences.create(
-            ENCRYPTED_PREFS_FILE_NAME,
-            MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-            requireContext(),
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                ENCRYPTED_PREFS_FILE_NAME,
+                MasterKeys.getOrCreate(KeyGenParameterSpec.Builder(MASTER_KEY_ALIAS,
+                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .setUserAuthenticationRequired(true)
+                        .setUserAuthenticationValidityDurationSeconds(5)
+                        .build()),
+                requireContext(),
+
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    }
+    }*/
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
     ): View? {
         binding = FragmentListBinding.inflate(inflater, container, false)
         return binding.root
@@ -85,13 +114,40 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
         return when (item?.itemId) {
             R.id.menu_list_add_item -> {
                 findNavController().navigate(
-                    ListFragmentDirections.actionListFragmentToEditFragment("")
+                        ListFragmentDirections.actionListFragmentToEditFragment("")
                 )
                 true
             }
             R.id.menu_list_password -> {
-                if (getPassword() == null) showSetPasswordDialog() else showResetPasswordDialog()
-                true
+
+                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Biometric login for my app")
+                    .setSubtitle("Log in using your biometric credential")
+                    .setNegativeButtonText("Cancel")
+                    .build()
+
+                sharedLive = Biometric.create(this, ENCRYPTED_PREFS_FILE_NAME, 1, promptInfo)
+
+                sharedLive.observe(ListFragment@this, Observer { sp ->
+
+                    Thread.sleep(3000)
+
+                    if (sp == null) return@Observer
+
+
+                    sharedPreferences = sp
+                    val password = sp.getString(
+                        ENCRYPTED_PREFS_PASSWORD_KEY,
+                        null)
+
+                    Log.d("Password", "Value = " + password)
+
+                    if (password == null) showSetPasswordDialog()
+
+                })
+
+                // if (getPassword() == null) showSetPasswordDialog() else showResetPasswordDialog()
+               true
             }
             else -> false
         }
@@ -111,8 +167,8 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
 
     private fun getPassword(): String? {
         return sharedPreferences.getString(
-            ENCRYPTED_PREFS_PASSWORD_KEY,
-            null
+                ENCRYPTED_PREFS_PASSWORD_KEY,
+                null
         )
     }
 
@@ -151,14 +207,14 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
 
     private fun editFile(file: FileEntity) {
         findNavController().navigate(
-            ListFragmentDirections
-                .actionListFragmentToEditFragment(file.title)
+                ListFragmentDirections
+                        .actionListFragmentToEditFragment(file.title)
         )
     }
 
     private fun buildPasswordDialog(
-        @StringRes title: Int = R.string.dialog_password_title,
-        onPositiveClicked: (value: String) -> Unit
+            @StringRes title: Int = R.string.dialog_password_title,
+            onPositiveClicked: (value: String) -> Unit
     ): AlertDialog {
         val view = View.inflate(requireContext(), R.layout.alert_dialog_password_layout, null)
         val editTextView: EditText = view.findViewById(R.id.password_input_edit_text)
@@ -174,8 +230,8 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
     }
 
     private fun buildResetPasswordDialog(
-        @StringRes title: Int = R.string.dialog_new_password_title,
-        onPositiveClicked: (current: String, new: String) -> Unit
+            @StringRes title: Int = R.string.dialog_new_password_title,
+            onPositiveClicked: (current: String, new: String) -> Unit
     ): AlertDialog {
         val view = View.inflate(requireContext(), R.layout.alert_dialog_reset_password_layout, null)
         val passwordEditTextView: EditText = view.findViewById(R.id.password_input_edit_text)
@@ -186,8 +242,8 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
             .setView(view)
             .setPositiveButton(R.string.dialog_new_password_positive_button) { _, _ ->
                 onPositiveClicked(
-                    passwordEditTextView.text.toString(),
-                    newPasswordEditTextView.text.toString()
+                        passwordEditTextView.text.toString(),
+                        newPasswordEditTextView.text.toString()
                 )
             }
             .setNegativeButton(R.string.dialog_new_password_negative_button) { _, _ -> }

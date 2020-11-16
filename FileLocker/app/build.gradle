@@ -59,6 +59,7 @@ dependencies {
     implementation "androidx.navigation:navigation-ui-ktx:$navigation_version"
     implementation "androidx.recyclerview:recyclerview:$recyclerview_version"
     implementation "androidx.security:security-crypto:$security_crypto_version"
+    implementation "androidx.biometric:biometric:$biometric_version"
 
     // Material
     implementation "com.google.android.material:material:$material_version"
