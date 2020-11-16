@@ -44,13 +44,14 @@ public class Biometric {
                             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                             .setKeySize(KEY_SIZE)
                             .setUserAuthenticationValidityDurationSeconds(userAuthenticationValidityDurationSeconds)
-                            .setUserAuthenticationRequired(true).build()),
+                            .setUserAuthenticationRequired(true)
+                            .build()),
                     c,
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             );
         } catch (GeneralSecurityException | IOException e) {
-            Log.e("Error", e.toString());
+            Log.e("Biometric", "Error:" + e.toString());
             return null;
         }
     }
@@ -73,7 +74,7 @@ public class Biometric {
         public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
             super.onAuthenticationSucceeded(result);
 
-            Log.d("onAuthSucceeded",  "Succeed");
+            Log.d("Biometric",  "Succeed");
 
             out.postValue(create(context, fileName, userAuthenticationValidityDurationSeconds));
         }
@@ -82,7 +83,7 @@ public class Biometric {
         public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
             super.onAuthenticationError(errorCode, errString);
 
-            Log.d("onAuthenticationError", errString + "");
+            Log.d("Biometric", "Error:" + errString);
 
             out.postValue(null);
         }

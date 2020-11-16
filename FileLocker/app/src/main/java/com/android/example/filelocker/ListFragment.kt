@@ -56,29 +56,39 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
 
     private lateinit var binding: FragmentListBinding
     private lateinit var sharedPreferences: SharedPreferences
-    private lateinit var sharedLive: LiveData<SharedPreferences>
 
 
-    //MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+    private fun getSharedPrefs(toExecute: () -> Unit) {
 
-    /*private val sharedPreferences by lazy {
-        EncryptedSharedPreferences.create(
+        if (::sharedPreferences.isInitialized) {
+            Log.d("Biometric", "Shared Prefs diverso da null");
+
+            toExecute()
+            return
+        }
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Biometric login for my app")
+                .setSubtitle("Log in using your biometric credential")
+                .setNegativeButtonText("Cancel")
+                .build()
+
+        val sharedLive = Biometric.create(this,
                 ENCRYPTED_PREFS_FILE_NAME,
-                MasterKeys.getOrCreate(KeyGenParameterSpec.Builder(MASTER_KEY_ALIAS,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                15,
+                promptInfo)
 
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
-                        .setUserAuthenticationRequired(true)
-                        .setUserAuthenticationValidityDurationSeconds(5)
-                        .build()),
-                requireContext(),
+        sharedLive.observe(this, Observer { sp ->
 
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }*/
+            Log.d("Biometric", "Shared pref in ingresso " + sp )
+
+            if (sp == null) return@Observer
+            sharedPreferences = sp
+
+            // Metodo di business
+            toExecute()
+        })
+    }
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -120,33 +130,11 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
             }
             R.id.menu_list_password -> {
 
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Biometric login for my app")
-                    .setSubtitle("Log in using your biometric credential")
-                    .setNegativeButtonText("Cancel")
-                    .build()
+                    getSharedPrefs {
+                                    if (getPassword() == null)
+                                        showSetPasswordDialog() else showResetPasswordDialog()
+                                    }
 
-                sharedLive = Biometric.create(this, ENCRYPTED_PREFS_FILE_NAME, 1, promptInfo)
-
-                sharedLive.observe(ListFragment@this, Observer { sp ->
-
-                    Thread.sleep(3000)
-
-                    if (sp == null) return@Observer
-
-
-                    sharedPreferences = sp
-                    val password = sp.getString(
-                        ENCRYPTED_PREFS_PASSWORD_KEY,
-                        null)
-
-                    Log.d("Password", "Value = " + password)
-
-                    if (password == null) showSetPasswordDialog()
-
-                })
-
-                // if (getPassword() == null) showSetPasswordDialog() else showResetPasswordDialog()
                true
             }
             else -> false
@@ -192,16 +180,18 @@ class ListFragment : Fragment(), FileAdapter.FileAdapterListener {
     }
 
     private fun onEncryptedFileClicked(file: FileEntity) {
-        if (getPassword() == null) {
-            editFile(file)
-        } else {
-            buildPasswordDialog {
-                if (it == getPassword()) {
-                    editFile(file)
-                } else {
-                    showSnackbar(R.string.error_incorrect_password)
-                }
-            }.show()
+        getSharedPrefs {
+            if (getPassword() == null) {
+                editFile(file)
+            } else {
+                buildPasswordDialog {
+                    if (it == getPassword()) {
+                        editFile(file)
+                    } else {
+                        showSnackbar(R.string.error_incorrect_password)
+                    }
+                }.show()
+            }
         }
     }
 
